@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -209,7 +208,10 @@ func readLineFrom(r io.Reader) (string, error) {
 	for {
 		n, err := r.Read(one[:])
 		if n > 0 {
-			if one[0] == '\n' || one[0] == '\r' {
+			if one[0] == '\r' {
+				continue
+			}
+			if one[0] == '\n' {
 				return b.String(), nil
 			}
 			b.WriteByte(one[0])
@@ -229,28 +231,12 @@ func readHiddenLine(prompt string) (string, error) {
 		fmt.Fprint(os.Stdout, prompt)
 		return readDirectLine()
 	}
-	get := exec.Command("stty", "-g")
-	get.Stdin = os.Stdin
-	state, err := get.Output()
+	restore, err := terminalInputMode(false)
 	if err != nil {
 		return "", fmt.Errorf("无法关闭终端回显，请检查终端：%w", err)
 	}
-	set := exec.Command("stty", "-echo")
-	set.Stdin = os.Stdin
-	if err := set.Run(); err != nil {
-		return "", fmt.Errorf("无法关闭终端回显：%w", err)
-	}
 	fmt.Fprint(os.Stdout, prompt)
-	restoreTerminal := func() {
-		restore := exec.Command("stty", strings.TrimSpace(string(state)))
-		restore.Stdin = os.Stdin
-		if err := restore.Run(); err != nil {
-			fallback := exec.Command("stty", "echo")
-			fallback.Stdin = os.Stdin
-			_ = fallback.Run()
-		}
-		fmt.Fprintln(os.Stdout)
-	}
+	restoreTerminal := onceRestore(func() { restore(); fmt.Fprintln(os.Stdout) })
 	interrupt := make(chan os.Signal, 1)
 	done := make(chan struct{})
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
@@ -258,6 +244,7 @@ func readHiddenLine(prompt string) (string, error) {
 		select {
 		case <-interrupt:
 			restoreTerminal()
+			restoreConsole()
 			os.Exit(130)
 		case <-done:
 		}

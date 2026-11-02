@@ -23,13 +23,17 @@ import (
 var errQuit = errors.New("退出")
 var errPeerLeft = errors.New("对方已退出")
 
-func main() {
+func main() { os.Exit(runMain()) }
+
+func runMain() int {
+	consoleVisual, restoreConsole = initializeConsole()
+	defer restoreConsole()
 	if len(os.Args) < 2 {
 		if err := wizard(); err != nil && !errors.Is(err, errQuit) {
 			fmt.Fprintln(os.Stderr, "错误：", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 	var err error
 	switch os.Args[1] {
@@ -43,12 +47,13 @@ func main() {
 		usage()
 	default:
 		usage()
-		os.Exit(2)
+		return 2
 	}
 	if err != nil && !errors.Is(err, errQuit) {
 		fmt.Fprintln(os.Stderr, "错误：", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func usage() {
@@ -81,7 +86,7 @@ AI Key 从 MOYU_RED_API_KEY、MOYU_BLACK_API_KEY 读取；也可共用 OPENAI_AP
 
 func colorEnabled() bool {
 	info, err := os.Stdout.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0 && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+	return consoleVisual && err == nil && info.Mode()&os.ModeCharDevice != 0 && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 }
 
 func keyFor(side xiangqi.Side) string {

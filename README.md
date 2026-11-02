@@ -57,7 +57,7 @@ go run ./cmd/moyu
 - **联机对战**：创建或加入房间。
 - **本地对局**：双人轮流、人对 AI、AI 对 AI。
 
-中文为引导菜单默认显示。游戏可在普通终端或 VS Code 集成终端运行；推荐使用支持 ANSI 颜色和 xterm SGR 鼠标事件的 macOS / Linux 终端。终端不支持鼠标时可使用键盘；Windows 的终端交互与鼠标行为需要自行验证。
+中文为引导菜单默认显示。游戏可在普通终端或 VS Code 集成终端运行；推荐使用支持 ANSI 颜色和 xterm SGR 鼠标事件的 macOS / Linux 终端。终端不支持鼠标时可使用键盘。Windows 版本采用原生 Console API，隐藏输入、窗口尺寸和输入模式恢复不依赖 `stty`；本项目仍需真实 Windows CMD / Windows Terminal 的交互验收。
 
 编译为独立程序后无需安装 Go：
 
@@ -65,6 +65,38 @@ go run ./cmd/moyu
 go build -o moyu ./cmd/moyu
 ./moyu
 ```
+
+
+## Windows CMD / PowerShell
+
+Windows 使用原生控制台接口，不需要安装或随程序分发 `stty`、Git Bash、WSL。已编译程序的用户不需要安装 Go。将 Windows 可执行文件放到目录中后，在 CMD 运行：
+
+```cmd
+moyu.exe
+```
+
+PowerShell 使用：
+
+```powershell
+.\moyu.exe
+```
+
+如需自行在 Windows 编译：
+
+```cmd
+go build -o moyu.exe ./cmd/moyu
+moyu.exe
+```
+
+从 macOS / Linux 交叉编译 Windows x86-64：
+
+```sh
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o moyu.exe ./cmd/moyu
+```
+
+程序通过 Windows `GetConsoleMode` / `SetConsoleMode` 控制隐藏输入、VT 输出与输入模式，并使用 `GetConsoleScreenBufferInfo` 获取可见窗口尺寸；退出时恢复原模式。支持的控制台会启用固定面板及 VT 输入，输出端不支持 VT 时退回普通文本显示；原生输入端无法切换 VT 时使用键盘逐行输入。鼠标报告依赖终端宿主的支持，不能以 `.exe` 编译成功视为鼠标已验收。中文显示也需要宿主字体包含中文字形。
+
+目前完成了 Windows x86-64 程序和 Windows 专用测试的交叉编译，以及本机回归、真实 macOS PTY 的隐藏输入与模式恢复检查；没有在真实 Windows CMD 或 Windows Terminal 中完成交互验收。具体 API 参见 [Microsoft Console Modes](https://learn.microsoft.com/en-us/windows/console/console-modes)。
 
 ## 怎么下棋
 

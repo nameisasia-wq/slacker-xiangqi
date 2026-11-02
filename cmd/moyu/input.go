@@ -53,12 +53,18 @@ func newRawTerminalInput(r io.Reader) *terminalInput {
 		defer close(in.events)
 		reader := bufio.NewReader(r)
 		var draft []byte
+		previousCR := false
 		for {
 			ch, err := reader.ReadByte()
 			if err != nil {
 				in.events <- inputEvent{err: err}
 				return
 			}
+			if ch == '\n' && previousCR {
+				previousCR = false
+				continue
+			}
+			previousCR = ch == '\r'
 			switch ch {
 			case 3, 4:
 				in.events <- inputEvent{err: io.EOF}

@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,31 +13,31 @@ import (
 )
 
 type screen struct {
-	out         io.Writer
-	interactive bool
-	color       bool
-	rows        int
-	cols        int
-	lastRows    int
-	lastCols    int
-	lastFrame   []string
-	initialized bool
-	view        xiangqi.View
-	layout      xiangqi.BoardLayout
-	draft       string
-	termState   string
-	mouse       bool
-	shareURL    string
-	shareToken  string
-	cleanup     func()
-	once        sync.Once
-	done        chan struct{}
+	out          io.Writer
+	interactive  bool
+	color        bool
+	rows         int
+	cols         int
+	lastRows     int
+	lastCols     int
+	lastFrame    []string
+	initialized  bool
+	view         xiangqi.View
+	layout       xiangqi.BoardLayout
+	draft        string
+	inputRestore func()
+	mouse        bool
+	shareURL     string
+	shareToken   string
+	cleanup      func()
+	once         sync.Once
+	done         chan struct{}
 }
 
 func newScreen() *screen {
 	outInfo, outErr := os.Stdout.Stat()
 	inInfo, inErr := os.Stdin.Stat()
-	interactive := outErr == nil && inErr == nil && outInfo.Mode()&os.ModeCharDevice != 0 && inInfo.Mode()&os.ModeCharDevice != 0 && os.Getenv("TERM") != "dumb"
+	interactive := consoleVisual && outErr == nil && inErr == nil && outInfo.Mode()&os.ModeCharDevice != 0 && inInfo.Mode()&os.ModeCharDevice != 0 && os.Getenv("TERM") != "dumb"
 	s := &screen{out: os.Stdout, interactive: interactive, color: colorEnabled(), rows: 24, cols: 80, done: make(chan struct{}), view: xiangqi.View{Bottom: xiangqi.Red}}
 	if interactive {
 		s.size()
@@ -51,6 +49,7 @@ func newScreen() *screen {
 		select {
 		case <-sig:
 			s.Close()
+			restoreConsole()
 			os.Exit(130)
 		case <-s.done:
 			signal.Stop(sig)
@@ -68,10 +67,8 @@ func (s *screen) Close() {
 			if s.mouse {
 				fmt.Fprint(s.out, "\x1b[?1000l\x1b[?1006l")
 			}
-			if s.termState != "" {
-				cmd := exec.Command("stty", s.termState)
-				cmd.Stdin = os.Stdin
-				_ = cmd.Run()
+			if s.inputRestore != nil {
+				s.inputRestore()
 			}
 			fmt.Fprint(s.out, "\x1b[?25h\x1b[?1049l")
 		}
@@ -118,7 +115,7 @@ func (s *screen) shareLines() []string {
 	if s.shareToken != "" {
 		lines = append(lines, wrapCells("邀请口令："+s.shareToken, width)...)
 	}
-	if s.termState != "" {
+	if s.inputRestore != nil {
 		if s.mouse {
 			lines = append(lines, wrapCells("输入 m 回车暂停鼠标，即可拖选复制；再输入 m 回车恢复", width)...)
 		} else {
@@ -133,18 +130,11 @@ func (s *screen) EnableMouse() bool {
 	if !s.interactive || s.out != os.Stdout {
 		return false
 	}
-	get := exec.Command("stty", "-g")
-	get.Stdin = os.Stdin
-	state, err := get.Output()
+	restore, err := terminalInputMode(true)
 	if err != nil {
 		return false
 	}
-	set := exec.Command("stty", "-echo", "-icanon", "min", "1", "time", "0")
-	set.Stdin = os.Stdin
-	if err := set.Run(); err != nil {
-		return false
-	}
-	s.termState = strings.TrimSpace(string(state))
+	s.inputRestore = restore
 	s.mouse = true
 	fmt.Fprint(s.out, "\x1b[?1000h\x1b[?1006h")
 	return true
@@ -152,8 +142,13 @@ func (s *screen) EnableMouse() bool {
 
 // ToggleMouse lets the terminal handle text selection while the board remains visible.
 func (s *screen) ToggleMouse() string {
-	if !s.interactive || s.termState == "" {
+	if !s.interactive || s.inputRestore == nil {
 		return "当前终端没有启用棋盘鼠标操作，可直接拖选文字"
+	}
+	if s.out == os.Stdout {
+		if err := terminalSelection(s.mouse); err != nil {
+			return "无法切换终端选择模式：" + err.Error()
+		}
 	}
 	if s.mouse {
 		fmt.Fprint(s.out, "\x1b[?1000l\x1b[?1006l")
@@ -172,20 +167,8 @@ func (s *screen) Select(p *xiangqi.Pos) {
 }
 
 func (s *screen) size() {
-	// stty is available on macOS/Linux; if absent, use the usual 80x24 size.
-	cmd := exec.Command("stty", "size")
-	cmd.Stdin = os.Stdin
-	output, err := cmd.Output()
-	if err != nil {
-		return
-	}
-	parts := strings.Fields(string(output))
-	if len(parts) != 2 {
-		return
-	}
-	rows, err1 := strconv.Atoi(parts[0])
-	cols, err2 := strconv.Atoi(parts[1])
-	if err1 == nil && err2 == nil && rows > 0 && cols > 0 {
+	rows, cols, err := terminalSize()
+	if err == nil && rows > 0 && cols > 0 {
 		s.rows, s.cols = rows, cols
 	}
 }

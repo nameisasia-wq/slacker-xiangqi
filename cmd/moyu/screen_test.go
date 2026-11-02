@@ -119,7 +119,7 @@ func TestInviteAndTunnelCommandsRedisplayDetails(t *testing.T) {
 
 func TestMouseCanPauseForInvitationCopyAndResume(t *testing.T) {
 	var output bytes.Buffer
-	ui := &screen{out: &output, interactive: true, rows: 24, cols: 80, termState: "saved", mouse: true, view: xiangqi.View{Bottom: xiangqi.Red}}
+	ui := &screen{out: &output, interactive: true, rows: 24, cols: 80, inputRestore: func() {}, mouse: true, view: xiangqi.View{Bottom: xiangqi.Red}}
 	ui.SetShare("https://sample.trycloudflare.com", "test-secret")
 	input := bufio.NewReader(strings.NewReader("m\nm\n0605\n"))
 	move, err := readMove(input, xiangqi.New(), ui, "开始走棋", "邀请口令：test-secret", "公网地址：https://sample.trycloudflare.com")
