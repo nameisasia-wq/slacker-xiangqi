@@ -1,0 +1,55 @@
+# Credentials, local configuration and personal data
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+id_ed25519*
+.ssh/
+.aws/
+.secrets/
+secrets/
+private/
+credentials*.json
+secrets*.json
+config.local.*
+*.local.json
+*.local.yaml
+*.local.yml
+
+# Build outputs and downloaded runtimes
+/moyu
+/moyu.exe
+/moyu-*
+/slacker-xiangqi
+/slacker-xiangqi.exe
+/bin/
+/build/
+/dist/
+/cloudflared
+/cloudflared.exe
+.cache/
+/tmp/
+
+# Runtime output
+*.log
+/logs/
+/recordings/
+/replays/
+
+# OS and editor state
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+__pycache__/
+*.py[cod]
+.coverage
+coverage.out
